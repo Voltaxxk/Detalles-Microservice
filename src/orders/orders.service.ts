@@ -5,7 +5,7 @@ import { ClientProxy, MessagePattern, RpcException } from '@nestjs/microservices
 import { PaginationDto } from 'src/common';
 import { OrderPaginationDto } from './dto/order-pagination.dto';
 import { ChangeOrderStatusDto } from './dto';
-import { PRODUCTS_SERVICE } from 'src/common/config';
+import { NATS_SERVICE, PRODUCTS_SERVICE } from 'src/common/config';
 import { firstValueFrom } from 'rxjs';
 
 
@@ -16,7 +16,7 @@ import { firstValueFrom } from 'rxjs';
 export class OrdersService extends PrismaClient  implements OnModuleInit   {
   
   constructor(
-    @Inject(PRODUCTS_SERVICE) private readonly productService : ClientProxy
+    @Inject(NATS_SERVICE) private readonly natsClient : ClientProxy
   ) {
     super();
   }
@@ -38,7 +38,7 @@ export class OrdersService extends PrismaClient  implements OnModuleInit   {
         console.log(productIds)
 
         const products =  await firstValueFrom(
-            this.productService.send({cmd : 'validate_products'}, productIds)
+            this.natsClient.send({cmd : 'validate_products'}, productIds)
           )
         
         console.log(products)
@@ -165,7 +165,7 @@ export class OrdersService extends PrismaClient  implements OnModuleInit   {
     const productsId = productIds.map(product => product.productId).sort()
 
     const products =  await firstValueFrom(
-      this.productService.send({cmd : 'validate_products'}, productsId)
+      this.natsClient.send({cmd : 'validate_products'}, productsId)
     )
   
     console.log(products)

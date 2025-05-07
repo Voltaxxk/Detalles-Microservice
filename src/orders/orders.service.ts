@@ -7,6 +7,8 @@ import { OrderPaginationDto } from './dto/order-pagination.dto';
 import { ChangeOrderStatusDto } from './dto';
 import { NATS_SERVICE, PRODUCTS_SERVICE } from 'src/common/config';
 import { firstValueFrom } from 'rxjs';
+import { OrderWithProducts } from './interfaces/order-with-products.interface';
+import { PaidOrderDto } from './dto/paid-order.dto';
 
 
 
@@ -35,13 +37,13 @@ export class OrdersService extends PrismaClient  implements OnModuleInit   {
 
         const productIds = createOrderDto.items.map(item => item.productId)
 
-        console.log(productIds)
+        // console.log(productIds)
 
         const products =  await firstValueFrom(
             this.natsClient.send({cmd : 'validate_products'}, productIds)
           )
         
-        console.log(products)
+        // console.log(products)
           
 
         const totalAmount = createOrderDto.items.reduce((acc, orderItem) => {
@@ -91,7 +93,6 @@ export class OrdersService extends PrismaClient  implements OnModuleInit   {
         OrderItem : order.OrderItem.map( (orderItem) => ({
           ...orderItem,
           product : products.find(product => product.id === orderItem.productId).name
-
         }))
       }
       
@@ -204,4 +205,56 @@ export class OrdersService extends PrismaClient  implements OnModuleInit   {
     // return changeOrderStatusDto
     // return `This action changes a #${id} order status to ${status}`;
   }
+
+
+  async createPaymentSession(order : OrderWithProducts) {
+
+    const paymentSession = await firstValueFrom(
+        this.natsClient.send('create.payment.session', {
+          orderId : order.id,
+          currency : 'usd',
+          
+          items : order.OrderItem.map(item => {
+
+
+            console.log({item})
+            return {
+              name : item.product,
+              price : item.price,
+              quantity : item.quantity
+            }
+          })
+      })
+    )
+
+    return paymentSession
+
+  }
+
+  async paidOrder(paidOrderDto : PaidOrderDto){
+
+    this.logger.log('Paid Order')
+    this.logger.log({paidOrderDto})
+
+    const updatedorder = await this.order.update({
+      where : {id : paidOrderDto.orderId},
+      data : {
+        status : 'PAID',
+        paid : true,
+        paidAt : new Date(),
+        stripeChargeId : paidOrderDto.stripePaymentId,
+
+        // Relation
+        OrderReceipt : {
+          create : {
+            receiptUrl : paidOrderDto.receiptUrl
+          }
+        }
+      }
+    })
+
+    return {...updatedorder}
+
+  }
+
 }
